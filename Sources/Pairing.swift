@@ -128,7 +128,7 @@ final class Pairing: ObservableObject {
     }
 
     private static let bluetoothDenied =
-        "macOS didn't let Precious use Bluetooth. Turn Precious on in System Settings › Privacy & Security "
+        "macOS didn't let Omidi use Bluetooth. Turn Omidi on in System Settings › Privacy & Security "
         + "› Bluetooth, then try again."
 
     private static func lastLine(_ s: String) -> String {
@@ -146,7 +146,7 @@ final class Pairing: ObservableObject {
         let range = NSRange(text.startIndex..., in: text)
         for m in scanLine.matches(in: text, range: range) {
             guard let rssi = Range(m.range(at: 1), in: text).flatMap({ Int(text[$0]) }),
-                  let name = Range(m.range(at: 2), in: text).map({ String(text[$0]) }),
+                  let name = Range(m.range(at: 2), in: text).map({ RingConfig.friendly(String(text[$0])) }),
                   let id = Range(m.range(at: 3), in: text).map({ String(text[$0]) }),
                   seen.insert(id).inserted
             else { continue }

@@ -1,8 +1,8 @@
 #!/bin/bash
-# Build Precious.app: the ring's pitch and roll as a MIDI controller, in its own window.
-#   ./build.sh            builds Precious.app here
+# Build Omidi.app: the ring's pitch and roll as a MIDI controller, in its own window.
+#   ./build.sh            builds Omidi.app here
 #   ./build.sh --open     builds it and starts it
-#   ./build.sh --package  builds a copy to share: dist/Precious.zip (send that file, not the .app)
+#   ./build.sh --package  builds a copy to share: dist/Omidi.zip (send that file, not the .app)
 #
 # Needs the open_oura client from the folder above (built by ../setup.sh); override with OURA_BIN.
 # Rings are paired inside the app. A developer build also points at ../ring.json (from ../pair.sh,
@@ -17,10 +17,10 @@ if [ ! -x "$OURA" ]; then
   exit 1
 fi
 MODE=${1:-}
-APP=Precious.app
+APP=Omidi.app
 if [ "$MODE" = "--package" ]; then
   mkdir -p dist
-  APP=dist/Precious.app
+  APP=dist/Omidi.app
 fi
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -32,7 +32,7 @@ fi
 # The ring client goes inside the app, next to the app's own program.
 cp "$OURA" "$APP/Contents/MacOS/oura"
 swiftc -O -parse-as-library -swift-version 5 -target "$(uname -m)-apple-macosx14.0" \
-  Sources/*.swift -o "$APP/Contents/MacOS/Precious"
+  Sources/*.swift -o "$APP/Contents/MacOS/Omidi"
 xattr -cr "$APP"  # files from the Desktop or a download carry metadata that codesign refuses
 # Ad-hoc signing sometimes fails on the first try; try a few times.
 for attempt in 1 2 3; do
@@ -44,12 +44,12 @@ done
 echo "Built $(pwd)/$APP"
 if [ "$MODE" = "--package" ]; then
   # ditto keeps the app a proper app (folder structure, permissions, signature); plain zips can break it.
-  rm -f dist/Precious.zip
-  ditto -c -k --keepParent "$APP" dist/Precious.zip
-  echo "Share this file: $(pwd)/dist/Precious.zip ($(du -h dist/Precious.zip | cut -f1))"
+  rm -f dist/Omidi.zip
+  ditto -c -k --keepParent "$APP" dist/Omidi.zip
+  echo "Share this file: $(pwd)/dist/Omidi.zip ($(du -h dist/Omidi.zip | cut -f1))"
 fi
 if [ "$MODE" = "--open" ]; then
-  osascript -e 'quit app "Precious"' 2>/dev/null || true  # a clean quit also stops the ring
+  osascript -e 'quit app "Omidi"' 2>/dev/null || true  # a clean quit also stops the ring
   sleep 2
   open "$APP"
 fi

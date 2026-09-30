@@ -27,7 +27,7 @@ enum Tab: CaseIterable {
         switch self {
         case .play: return "Play"
         case .settings: return "Settings"
-        case .info: return "About Precious"
+        case .info: return "About Omidi"
         }
     }
 }
@@ -40,7 +40,7 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .bottom, spacing: 8) {
-                Text("PRECIOUS")
+                Text("OMIDI")
                     .font(heavy(24))
                     .foregroundStyle(paper)
                     .padding(.bottom, 12)
@@ -117,21 +117,16 @@ struct PlayView: View {
             Title("MODE")
             ModeDots(count: c.modes, current: c.mode, pulse: pulse)
                 .padding(.top, 10)
-            Title("TILT").padding(.top, 34)
-            LevelBar(position: c.position(c.pitch, in: c.tiltRange), live: c.pitchCC != nil && !c.muted)
+            Title("TILT", muted: $c.tiltMuted).padding(.top, 34)
+            LevelBar(position: c.position(c.pitch, in: c.tiltRange), live: c.pitchCC != nil && !c.tiltMuted)
                 .padding(.top, 8)
-            Title("ROLL").padding(.top, 26)
-            LevelBar(position: c.position(c.roll, in: c.rollRange), live: c.rollCC != nil && !c.muted)
+            Title("ROLL", muted: $c.rollMuted).padding(.top, 26)
+            LevelBar(position: c.position(c.roll, in: c.rollRange), live: c.rollCC != nil && !c.rollMuted)
                 .padding(.top, 8)
-            HStack {
-                PillButton(title: "RESET", filled: false) { c.zeroHere() }
-                    .keyboardShortcut(.space, modifiers: [])
-                    .help("Make the current pose the middle of both bars (Space)")
-                Spacer()
-                PillButton(title: c.muted ? "MUTED" : "MUTE", filled: c.muted) { c.muted.toggle() }
-                    .help(c.muted ? "Sending no MIDI. Click to send again." : "Stop sending MIDI for now")
-            }
-            .padding(.top, 40)
+            PillButton(title: "RESET", filled: false) { c.zeroHere() }
+                .keyboardShortcut(.space, modifiers: [])
+                .help("Make the current pose the middle of both bars (Space)")
+                .padding(.top, 40)
             Spacer(minLength: 0)
             StatusLine(c: c, onPair: onPair)
         }
@@ -146,10 +141,37 @@ struct PlayView: View {
 
 private struct Title: View {
     let text: String
-    init(_ text: String) { self.text = text }
+    let muted: Binding<Bool>?
+    init(_ text: String, muted: Binding<Bool>? = nil) {
+        self.text = text
+        self.muted = muted
+    }
 
     var body: some View {
         Text(text).font(heavy(24)).foregroundStyle(ink)
+            // An overlay doesn't take part in layout, so the title stays where it was.
+            .overlay(alignment: .trailing) {
+                if let muted { PauseButton(active: muted).offset(x: 40) }
+            }
+    }
+}
+
+/// Pauses one MIDI signal: an empty circle with a pause icon; filled black while paused.
+private struct PauseButton: View {
+    @Binding var active: Bool
+
+    var body: some View {
+        Button { active.toggle() } label: {
+            Image(systemName: "pause.fill")
+                .font(.system(size: 12, weight: .black))
+                .foregroundStyle(active ? paper : ink)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(active ? ink : paper))
+                .overlay(Circle().stroke(ink, lineWidth: 3))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(active ? "Paused: sending no MIDI for this. Click to resume." : "Pause this MIDI signal")
     }
 }
 
@@ -177,7 +199,7 @@ struct ModeDots: View {
 }
 
 /// Where the hand is within its range. The node is outlined gray while the CC isn't sending
-/// (after a mode change or reset, until the hand moves, and while muted).
+/// (after a mode change or reset, until the hand moves, and while paused).
 struct LevelBar: View {
     let position: Double?
     let live: Bool
@@ -300,7 +322,7 @@ struct SettingsView: View {
     }
 
     private func spanText(_ span: Double) -> String {
-        "\(Int(span))°  (±\(Int(span / 2))°)"
+        "\(Int(span))°"
     }
 }
 
@@ -429,12 +451,12 @@ struct InfoView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Precious is a MIDI device driver that receives input from a paired Oura ring and "
+                Text("Omidi is a MIDI device driver that receives input from a paired Oura ring and "
                      + "broadcasts MIDI CC signals that you can map expressively in music or other software.")
                 section("Tilt & Roll",
                         "These two movements are sent as two CC values. In Settings, choose the range of "
                         + "movement that maps to 0–127. Reset makes your current pose the middle of both; "
-                        + "Mute pauses all MIDI.")
+                        + "The pause buttons next to Tilt and Roll stop each one sending MIDI.")
                 section("Modes",
                         "Each mode sends on its own pair of CC numbers, so you can map them to different "
                         + "parameters. Tap your finger (a small, quick jolt) to move to the next mode; choose "
@@ -443,7 +465,7 @@ struct InfoView: View {
                 Text("A tap can also send CC \(Controller.tapCC): a momentary 127, a toggle between 127 and 0, "
                      + "or nothing. If taps are missed or appear by themselves, adjust the Tap Sensitivity.")
                 Text("Choose the MIDI channel to avoid conflicts with other devices. After a mode change, "
-                     + "reset or unmute, values wait for your hand to move, so nothing jumps.")
+                     + "reset or resume, values wait for your hand to move, so nothing jumps.")
             }
             .font(textFont(12.5))
             .foregroundStyle(ink)
@@ -539,7 +561,7 @@ struct PairingView: View {
     @ViewBuilder private var content: some View {
         switch p.step {
         case .intro:
-            Text("Use a spare ring. Pairing installs Precious's own key on the ring, so the Oura app and "
+            Text("Use a spare ring. Pairing installs Omidi's own key on the ring, so the Oura app and "
                  + "your Oura account stop working with it until you reset it and set it up there again.")
                 .font(textFont(12.5, .bold))
                 .fixedSize(horizontal: false, vertical: true)
@@ -589,11 +611,11 @@ struct PairingView: View {
         case .pairing(let ring):
             HStack(spacing: 12) {
                 ProgressView().controlSize(.small)
-                Text("Installing Precious's key on \(ring.name). Keep it close; this can take half a minute.")
+                Text("Installing Omidi's key on \(ring.name). Keep it close; this can take half a minute.")
                     .fixedSize(horizontal: false, vertical: true)
             }
         case .done(let ring):
-            Text("\(ring.name) is paired with this Mac. Precious will start listening to it now.")
+            Text("\(ring.name) is paired with this Mac. Omidi will start listening to it now.")
                 .fixedSize(horizontal: false, vertical: true)
         case .failed(let message):
             Text(message).fixedSize(horizontal: false, vertical: true)

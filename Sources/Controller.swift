@@ -11,7 +11,7 @@ final class Controller: ObservableObject {
     static let smooth = 0.2  // low-pass per sample (~100 ms); lower is steadier but lags more
     static let movingG = 0.15  // |a| this far from 1 g: the hand is accelerating, angles are rough
     // The ring stops streaming on its own after this, so a stream that's somehow left behind can't
-    // run for long; Precious reconnects by itself when it ends (a few seconds' gap, once an hour).
+    // run for long; Omidi reconnects by itself when it ends (a few seconds' gap, once an hour).
     static let streamSeconds = 3600
     static let settleSamples = 10  // 200 ms after a tap before the CCs (and a new mode's start) resume
     /// Tap sensitivity: five levels of the jolt size a tap needs, most sensitive first.
@@ -22,7 +22,7 @@ final class Controller: ObservableObject {
     static let defaultTapThreshold = 3000.0
     /// Every judged jolt goes here, so taps can be tuned from real data.
     static let tapLog = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Logs/Precious/taps.jsonl")
+        .appendingPathComponent("Library/Logs/Omidi/taps.jsonl")
 
     enum State { case stopped, connecting, streaming, stopping }
 
@@ -115,9 +115,12 @@ final class Controller: ObservableObject {
     }
     var tiltRange: AngleRange { AngleRange(low: -tiltSpan / 2, high: tiltSpan / 2) }
     var rollRange: AngleRange { AngleRange(low: -rollSpan / 2, high: rollSpan / 2) }
-    /// While muted nothing is sent; the ring keeps streaming and the window keeps moving.
-    @Published var muted = false {
-        didSet { if !muted && oldValue { armAxes() } }  // don't jump to wherever the hand went meanwhile
+    /// While an axis is muted it sends nothing; the ring keeps streaming and the window keeps moving.
+    @Published var tiltMuted = false {
+        didSet { if !tiltMuted && oldValue { pitchAxis.arm(); pitchCC = nil } }  // don't jump to wherever the hand went meanwhile
+    }
+    @Published var rollMuted = false {
+        didSet { if !rollMuted && oldValue { rollAxis.arm(); rollCC = nil } }
     }
     /// How big a jolt a tap needs (raw counts); lower is more sensitive.
     @Published var tapThreshold: Double {
@@ -150,7 +153,7 @@ final class Controller: ObservableObject {
 
     private let defaults = UserDefaults.standard
     private let ring = RingStream()
-    private let midi = MidiOut(name: "Precious")
+    private let midi = MidiOut(name: "Omidi")
     private var detector: TapDetector
     private var tapLog: FileHandle?
     private var toggleOn = false  // the Toggle tap state: the next tap sends 127 when false, 0 when true
@@ -202,7 +205,7 @@ final class Controller: ObservableObject {
     /// Re-read which ring is paired (after pairing, or at launch).
     func refreshRing() {
         let ring = RingConfig.load()
-        ringName = ring.map { $0.name ?? "Paired ring" }
+        ringName = ring.map { $0.name ?? RingConfig.defaultName }
     }
 
     func start() {
@@ -297,20 +300,23 @@ final class Controller: ObservableObject {
         }
         guard !holding else { return }
         if settle > 0 { settle -= 1; return }
-        guard !muted else { return }
-        if let out = pitchAxis.output(Self.scale(p, tiltRange)) {
-            midi?.cc(channel: channel, number: pitchCCNumber, value: out)
+        if !tiltMuted {
+            if let out = pitchAxis.output(Self.scale(p, tiltRange)) {
+                midi?.cc(channel: channel, number: pitchCCNumber, value: out)
+            }
+            pitchCC = pitchAxis.sent
         }
-        if let out = rollAxis.output(Self.scale(r, rollRange)) {
-            midi?.cc(channel: channel, number: rollCCNumber, value: out)
+        if !rollMuted {
+            if let out = rollAxis.output(Self.scale(r, rollRange)) {
+                midi?.cc(channel: channel, number: rollCCNumber, value: out)
+            }
+            rollCC = rollAxis.sent
         }
-        pitchCC = pitchAxis.sent
-        rollCC = rollAxis.sent
     }
 
     private func tapped() {
         taps += 1
-        if !muted, let midi {
+        if let midi {
             let ch = channel
             switch tapMIDI {
             case .off:

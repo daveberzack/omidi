@@ -1,7 +1,7 @@
 import Foundation
 
-/// The paired ring: its Bluetooth address on this Mac and the auth key Precious installed on it,
-/// kept in ~/Library/Application Support/Precious (ring.json and ring.key).
+/// The paired ring: its Bluetooth address on this Mac and the auth key Omidi installed on it,
+/// kept in ~/Library/Application Support/Omidi (ring.json and ring.key).
 ///
 /// The address is the id macOS gives the ring on this Mac, so a ring is paired per Mac. A
 /// developer build also knows the FunOura folder's ring.json (stamped into Info.plist as
@@ -12,11 +12,20 @@ struct RingConfig {
     let name: String?
 
     static let folder = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Application Support/Precious")
+        .appendingPathComponent("Library/Application Support/Omidi")
     static let file = folder.appendingPathComponent("ring.json")
     static let keyFile = folder.appendingPathComponent("ring.key")
 
+    static let defaultName = "My Oura"
+
+    /// A scanned ring with no advertised name shows up as "(unnamed)" (or nothing): call it something friendly.
+    static func friendly(_ name: String?) -> String {
+        let n = name?.trimmingCharacters(in: .whitespaces) ?? ""
+        return n.isEmpty || n == "(unnamed)" ? defaultName : n
+    }
+
     static func load() -> RingConfig? {
+        migrateFromPrecious()
         if let c = read(file) { return c }
         importDeveloperRing()
         return read(file)
@@ -39,6 +48,14 @@ struct RingConfig {
             .write(to: file, options: .atomic)
     }
 
+    /// The app was called Precious before: carry its pairing over to the new folder.
+    private static func migrateFromPrecious() {
+        let fm = FileManager.default
+        let old = folder.deletingLastPathComponent().appendingPathComponent("Precious")
+        guard !fm.fileExists(atPath: folder.path), fm.fileExists(atPath: old.path) else { return }
+        try? fm.moveItem(at: old, to: folder)
+    }
+
     private static func read(_ url: URL) -> RingConfig? {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -49,7 +66,7 @@ struct RingConfig {
             ? keyFile
             : url.deletingLastPathComponent().appendingPathComponent(keyFile).path
         guard FileManager.default.fileExists(atPath: key) else { return nil }
-        return RingConfig(address: address, keyPath: key, name: json["name"] as? String)
+        return RingConfig(address: address, keyPath: key, name: friendly(json["name"] as? String))
     }
 
     private static func importDeveloperRing() {
@@ -146,7 +163,7 @@ enum OuraTool {
         if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
     }
 
-    /// Stop any oura left behind by an earlier Precious (its parent gone, so it's now launchd's
+    /// Stop any oura left behind by an earlier Omidi (its parent gone, so it's now launchd's
     /// child) before connecting, so it can't hold on to the ring. `done` runs on the main queue.
     static func reapLeftovers(done: @escaping () -> Void) {
         DispatchQueue.global().async {

@@ -2,11 +2,11 @@ import AppKit
 import SwiftUI
 
 @main
-struct PreciousApp: App {
+struct OmidiApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        Window("Precious", id: "main") {
+        Window("Omidi", id: "main") {
             ContentView(c: delegate.controller, p: delegate.pairing)
         }
         .windowStyle(.hiddenTitleBar)
